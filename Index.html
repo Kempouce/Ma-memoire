@@ -1,0 +1,153 @@
+<!DOCTYPE html>
+<html lang="fr">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0, maximum-scale=1.0, user-scalable=no">
+    <title>Mon Journal de Mémoire</title>
+    <!-- Tailwind CSS pour un design épuré et moderne -->
+    <script src="https://cdn.tailwindcss.com"></script>
+    <meta name="apple-mobile-web-app-capable" content="yes">
+    <meta name="apple-mobile-web-app-status-bar-style" content="black-translucent">
+</head>
+<body class="bg-slate-50 text-slate-800 min-h-screen flex flex-col">
+
+    <!-- En-tête -->
+    <header class="bg-indigo-600 text-white p-4 shadow-md sticky top-0 z-10">
+        <h1 class="text-lg font-bold text-center">🧠 Mémoire & Contexte</h1>
+    </header>
+
+    <!-- Contenu Principal -->
+    <main class="flex-1 max-w-md w-full mx-auto p-4 flex flex-col gap-4 pb-20">
+        
+        <!-- Zone de Saisie -->
+        <div class="bg-white p-4 rounded-2xl shadow-sm border border-slate-100 flex flex-col gap-3">
+            <textarea id="noteInput" rows="3" placeholder="Qu'as-tu dit ou fait ? (Ex: Accord donné à Paul pour le devis...)" class="w-full p-3 border border-slate-200 rounded-xl focus:outline-none focus:ring-2 focus:ring-indigo-500 text-sm resize-none"></textarea>
+            
+            <div class="flex items-center justify-between gap-2">
+                <!-- Bouton Dictée Vocale (Web Speech API) -->
+                <button id="micBtn" onclick="toggleSpeech()" class="flex items-center justify-center gap-2 bg-slate-100 hover:bg-slate-200 text-slate-700 px-4 py-2.5 rounded-xl text-sm font-medium transition flex-1">
+                    🎤 <span id="micText">Dicter</span>
+                </button>
+                <!-- Bouton Enregistrer -->
+                <button onclick="saveNote()" class="bg-indigo-600 hover:bg-indigo-700 text-white px-5 py-2.5 rounded-xl text-sm font-medium transition flex-1 shadow-sm shadow-indigo-200">
+                    Enregistrer
+                </button>
+            </div>
+        </div>
+
+        <!-- Barre de Recherche Intelligente -->
+        <div class="relative">
+            <span class="absolute inset-y-0 left-0 flex items-center pl-3 pointer-events-none text-slate-400">🔍</span>
+            <input type="text" id="searchInput" oninput="filterNotes()" placeholder="Rechercher par mot-clé (ex: devis, Paul, voiture)..." class="w-full pl-10 pr-4 py-3 bg-white border border-slate-200 rounded-xl text-sm focus:outline-none focus:ring-2 focus:ring-indigo-500 shadow-sm">
+        </div>
+
+        <!-- Liste des Souvenirs -->
+        <div class="flex flex-col gap-3" id="notesList">
+            <!-- Les notes injectées dynamiquement ici -->
+        </div>
+
+    </main>
+
+    <!-- Script de logique -->
+    <script>
+        let notes = JSON.parse(localStorage.getItem('my_memories') || '[]');
+        let isRecording = false;
+        let recognition = null;
+
+        // Configuration de la reconnaissance vocale (Safari / iOS supporte webkitSpeechRecognition)
+        if ('webkitSpeechRecognition' in window || 'SpeechRecognition' in window) {
+            const SpeechRecognition = window.SpeechRecognition || window.webkitSpeechRecognition;
+            recognition = new SpeechRecognition();
+            recognition.lang = 'fr-FR';
+            recognition.continuous = false;
+            recognition.interimResults = false;
+
+            recognition.onresult = (event) => {
+                const text = event.results[0][0].transcript;
+                const input = document.getElementById('noteInput');
+                input.value += (input.value ? ' ' : '') + text;
+                stopSpeechUI();
+            };
+
+            recognition.onerror = () => stopSpeechUI();
+            recognition.onend = () => stopSpeechUI();
+        }
+
+        function toggleSpeech() {
+            if (!recognition) {
+                alert("La dictée vocale n'est pas supportée par ce navigateur. Utilisez Safari sur iOS.");
+                return;
+            }
+            if (isRecording) {
+                recognition.stop();
+            } else {
+                recognition.start();
+                isRecording = true;
+                document.getElementById('micBtn').classList.add('bg-red-100', 'text-red-600', 'border', 'border-red-200');
+                document.getElementById('micText').innerText = "Écoute...";
+            }
+        }
+
+        function stopSpeechUI() {
+            isRecording = false;
+            const btn = document.getElementById('micBtn');
+            btn.classList.remove('bg-red-100', 'text-red-600', 'border', 'border-red-200');
+            document.getElementById('micText').innerText = "Dicter";
+        }
+
+        function saveNote() {
+            const input = document.getElementById('noteInput');
+            const text = input.value.trim();
+            if (!text) return;
+
+            const newNote = {
+                id: Date.now(),
+                content: text,
+                date: new Date().toLocaleDateString('fr-FR', { day: 'numeric', month: 'long', year: 'numeric', hour: '2-digit', minute: '2-digit' })
+            };
+
+            notes.unshift(newNote);
+            localStorage.setItem('my_memories', JSON.stringify(notes));
+            input.value = '';
+            renderNotes(notes);
+        }
+
+        function deleteNote(id) {
+            notes = notes.filter(n => n.id !== id);
+            localStorage.setItem('my_memories', JSON.stringify(notes));
+            renderNotes(notes);
+        }
+
+        function filterNotes() {
+            const query = document.getElementById('searchInput').value.toLowerCase();
+            const filtered = notes.filter(n => n.content.toLowerCase().includes(query));
+            renderNotes(filtered);
+        }
+
+        function renderNotes(notesToDisplay) {
+            const container = document.getElementById('notesList');
+            if (notesToDisplay.length === 0) {
+                container.innerHTML = `<div class="text-center py-10 text-slate-400 text-sm">Aucun souvenir trouvé.</div>`;
+                return;
+            }
+
+            container.innerHTML = notesToDisplay.map(n => `
+                <div class="bg-white p-4 rounded-2xl shadow-sm border border-slate-100 flex flex-col gap-2">
+                    <div class="flex justify-between items-start">
+                        <span class="text-xs font-medium text-indigo-600 bg-indigo-50 px-2.5 py-1 rounded-lg">${n.date}</span>
+                        <button onclick="deleteNote(${n.id})" class="text-slate-300 hover:text-red-500 text-xs transition">Supprimer</button>
+                    </div>
+                    <p class="text-sm text-slate-700 whitespace-pre-wrap">${escapeHtml(n.content)}</p>
+                </div>
+            `).join('');
+        }
+
+        function escapeHtml(text) {
+            return text.replace(/&/g, "&amp;").replace(/</g, "&lt;").replace(/>/g, "&gt;");
+        }
+
+        // Chargement initial
+        renderNotes(notes);
+    </script>
+</body>
+</html>
